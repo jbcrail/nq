@@ -121,7 +121,27 @@ usage:
     }
   }
 
+#ifndef O_DIRECTORY
+  /* manually check stat(2) for directory existence on systems w/o O_DIRECTORY,
+   * such as Solaris or older Linux kernels. The O_DIRECTORY flag prevents a
+   * race condition by opening a path and checking if it's a directory in one
+   * system call, but this isn't available on all platforms.
+   */
+  struct stat statbuf;
+  if (stat(path, &statbuf) == -1) {
+    perror("stat");
+    exit(111);
+  }
+
+  if (!S_ISDIR(statbuf.st_mode)) {
+    perror("S_ISDIR");
+    exit(111);
+  }
+
+  dirfd = open(path, O_RDONLY);
+#else
   dirfd = open(path, O_RDONLY | O_DIRECTORY);
+#endif
   if (dirfd < 0) {
     perror("dir open");
     exit(111);
