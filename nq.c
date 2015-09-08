@@ -20,9 +20,6 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
 */
 
-/* for FreeBSD.  */
-#define _WITH_DPRINTF
-
 #include <sys/file.h>
 #include <sys/stat.h>
 #include <sys/time.h>

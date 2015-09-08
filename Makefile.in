@@ -1,6 +1,8 @@
-ALL=nq fq tq
+ALL = nq fq tq
 
-CFLAGS=-g -Wall -O2
+CC = @CC@
+CFLAGS = @CFLAGS@
+LDFLAGS = @LDFLAGS@
 
 DESTDIR=
 PREFIX=/usr/local

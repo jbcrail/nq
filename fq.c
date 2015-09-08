@@ -21,10 +21,6 @@
 
 #define DELAY 250000
 
-#ifdef __linux__
-#define USE_INOTIFY
-#endif
-
 #ifdef USE_INOTIFY
 #include <sys/inotify.h>
 char ibuf[8192];

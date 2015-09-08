@@ -1,0 +1,99 @@
+#!/bin/bash
+
+# In lieu of using autotools, which cannot be assumed to exist on older or
+# non-standard platforms, I've written a bash script that helps C-based
+# projects to follow the "./configure && make" pattern. I realize this breaks
+# the "test features, not operating systems" rule, but I've found this to be a
+# good tradeoff.
+
+# Given a variable name and a non-empty list of possible programs, this function
+# will find the first viable item in the available programs and set the
+# variable. If no viable program exists, then the variable is set to an empty
+# string.
+function find_and_set()
+{
+  local __var=$1
+  eval $__var=""
+  for arg in ${@:2}
+  do
+    if [[ `(which $arg) 2>/dev/null` ]]
+    then
+      eval $__var="$arg"
+      break
+    fi
+  done
+}
+
+################################################################################
+
+echo -n "checking host system type... "
+
+OS_ARCH=`(uname -m) 2>/dev/null` || OS_ARCH=unknown
+OS_NAME=`(uname -s) 2>/dev/null` || OS_NAME=unknown
+OS_RELEASE=`(uname -r) 2>/dev/null` || OS_RELEASE=unknown
+OS=`(echo ${OS_ARCH}-${OS_NAME}-${OS_RELEASE} | tr "[A-Z]" "[a-z]")`
+
+echo "${OS}"
+
+################################################################################
+
+echo "configuring build..."
+
+find_and_set AR   "gar" "ar"
+find_and_set CC   "gcc" "clang" "cc"
+find_and_set MAKE "gmake" "make"
+
+CFLAGS="-g -O2 -Wall -pedantic"
+
+case ${OS} in
+    *linux*)
+        CFLAGS="${CFLAGS} -std=c99 -D_XOPEN_SOURCE -DUSE_INOTIFY"
+        LDFLAGS="-lm"
+        ;;
+
+    *darwin*)
+        CFLAGS="${CFLAGS} -std=c99"
+        LDFLAGS=""
+        ;;
+
+    *freebsd*)
+        CFLAGS="${CFLAGS} -std=c99 -D_WITH_DPRINTF"
+        LDFLAGS="-lm"
+        ;;
+
+    *sunos*) # Solaris
+        CFLAGS="${CFLAGS} -D__EXTENSIONS__"
+        LDFLAGS="-lm"
+        case ${OS} in
+            *sunos-5.8*) # Solaris 8
+                CFLAGS="${CFLAGS} -std=gnu99 -D_XOPEN_SOURCE -D_XPG4_2"
+                ;;
+
+              *)
+                CFLAGS="${CFLAGS} -std=c99"
+                ;;
+        esac
+        ;;
+
+    *)
+        exit 1;;
+esac
+
+echo
+echo "  AR        = ${AR}"
+echo "  CC        = ${CC}"
+echo "  MAKE      = ${MAKE}"
+echo "  CFLAGS    = ${CFLAGS}"
+echo "  LDFLAGS   = ${LDFLAGS}"
+echo
+
+################################################################################
+
+SUB_VARS="s|@CC@|${CC}|g"
+SUB_VARS="${SUB_VARS};s|@AR@|${AR}|g"
+SUB_VARS="${SUB_VARS};s|@MAKE@|${MAKE}|g"
+SUB_VARS="${SUB_VARS};s|@CFLAGS@|${CFLAGS}|g"
+SUB_VARS="${SUB_VARS};s|@LDFLAGS@|${LDFLAGS}|g"
+
+echo "creating Makefile"
+sed -e "${SUB_VARS}" Makefile.in > Makefile
