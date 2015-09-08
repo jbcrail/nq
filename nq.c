@@ -43,267 +43,257 @@
 static void
 swrite(int fd, char *str)
 {
-	size_t l = strlen(str);
+  size_t l = strlen(str);
 
-	if (write(fd, str, l) != l) {
-		perror("write");
-		exit(222);
-	}
+  if (write(fd, str, l) != l) {
+    perror("write");
+    exit(222);
+  }
 }
 
 static void
 write_execline(int fd, int argc, char *argv[])
 {
-	int i;
-	char *s;
+  int i;
+  char *s;
 
-	swrite(fd, "exec");
+  swrite(fd, "exec");
 
-	for (i = 0; i < argc; i++) {
-		swrite(fd, " '");
-		for (s = argv[i]; *s; s++) {
-			if (*s == '\'')
-				swrite(fd, "'\\''");
-			else
-				write(fd, s, 1);
-		}
-		swrite(fd, "'");
-	}
+  for (i = 0; i < argc; i++) {
+    swrite(fd, " '");
+    for (s = argv[i]; *s; s++) {
+      if (*s == '\'')
+        swrite(fd, "'\\''");
+      else
+        write(fd, s, 1);
+    }
+    swrite(fd, "'");
+  }
 }
 
 int
 main(int argc, char *argv[])
 {
-	int64_t ms;
-	int dirfd = 0, lockfd = 0, opt = 0, qflag = 0, tflag = 0, wflag = 0;
-	int pipefd[2];
-	char lockfile[64];
-	pid_t child;
-	struct timeval started;
-	struct dirent *ent;
-	DIR *dir;
+  int64_t ms;
+  int dirfd = 0, lockfd = 0, opt = 0, qflag = 0, tflag = 0, wflag = 0;
+  int pipefd[2];
+  char lockfile[64];
+  pid_t child;
+  struct timeval started;
+  struct dirent *ent;
+  DIR *dir;
 
-	/* timestamp is milliseconds since epoch.  */
-	gettimeofday(&started, NULL);
-	ms = (int64_t)started.tv_sec*1000 + started.tv_usec/1000;
+  /* timestamp is milliseconds since epoch.  */
+  gettimeofday(&started, NULL);
+  ms = (int64_t)started.tv_sec*1000 + started.tv_usec/1000;
 
-	while ((opt = getopt(argc, argv, "+hqtw")) != -1) {
-		switch (opt) {
-		case 'w':
-			wflag = 1;
-			break;
-		case 't':
-			tflag = 1;
-			break;
-                case 'q':
-			qflag = 1;
-			break;
-		case 'h':
-		default:
-			goto usage;
-		}
-	}
+  while ((opt = getopt(argc, argv, "+hqtw")) != -1) {
+    switch (opt) {
+    case 'w':
+      wflag = 1;
+      break;
+    case 't':
+      tflag = 1;
+      break;
+    case 'q':
+      qflag = 1;
+      break;
+    case 'h':
+    default:
+      goto usage;
+    }
+  }
 
-	if (argc <= 1) {
+  if (argc <= 1) {
 usage:
-		swrite(2, "usage: nq [-q] [-w ... | -t ... | CMD...]\n");
-		exit(1);
-	}
+    swrite(2, "usage: nq [-q] [-w ... | -t ... | CMD...]\n");
+    exit(1);
+  }
 
-	char *path = getenv("NQDIR");
-	if (!path)
-		path = ".";
+  char *path = getenv("NQDIR");
+  if (!path)
+    path = ".";
 
-	if (mkdir(path, 0777) < 0) {
-		if (errno != EEXIST) {
-			perror("mkdir");
-			exit(111);
-		}
-	}
+  if (mkdir(path, 0777) < 0) {
+    if (errno != EEXIST) {
+      perror("mkdir");
+      exit(111);
+    }
+  }
 
-	dirfd = open(path, O_RDONLY | O_DIRECTORY);
-	if (dirfd < 0) {
-		perror("dir open");
-		exit(111);
-	}
+  dirfd = open(path, O_RDONLY | O_DIRECTORY);
+  if (dirfd < 0) {
+    perror("dir open");
+    exit(111);
+  }
 
-	if (tflag || wflag) {
-		snprintf(lockfile, sizeof lockfile,
-		    ".,%011" PRIx64 ".%d", ms, getpid());
-		goto wait;
-	}
+  if (tflag || wflag) {
+    snprintf(lockfile, sizeof lockfile, ".,%011" PRIx64 ".%d", ms, getpid());
+    goto wait;
+  }
 
-	if (pipe(pipefd) < 0) {
-		perror("pipe");
-		exit(111);
-	};
+  if (pipe(pipefd) < 0) {
+    perror("pipe");
+    exit(111);
+  };
 
-	/* first fork, parent exits to run in background.  */
-	child = fork();
-	if (child == -1) {
-		perror("fork");
-		exit(111);
-	}
-	else if (child > 0) {
-		char c;
+  /* first fork, parent exits to run in background.  */
+  child = fork();
+  if (child == -1) {
+    perror("fork");
+    exit(111);
+  }
+  else if (child > 0) {
+    char c;
 
-		/* wait until child has backgrounded.  */
-		close(pipefd[1]);
-		read(pipefd[0], &c, 1);
+    /* wait until child has backgrounded.  */
+    close(pipefd[1]);
+    read(pipefd[0], &c, 1);
 
-		exit(0);
-	}
+    exit(0);
+  }
 
-	close(pipefd[0]);
+  close(pipefd[0]);
 
-	/* second fork, child later execs the job, parent collects status.  */
-	child = fork();
-	if (child == -1) {
-		perror("fork");
-		exit(111);
-	}
-	else if (child > 0) {
-		int status;
+  /* second fork, child later execs the job, parent collects status.  */
+  child = fork();
+  if (child == -1) {
+    perror("fork");
+    exit(111);
+  }
+  else if (child > 0) {
+    int status;
 
-		/* output expected lockfile name.  */
-		snprintf(lockfile, sizeof lockfile,
-		    ",%011" PRIx64 ".%d", ms, child);
-		if (!qflag)
-			dprintf(1, "%s\n", lockfile);
-		close(0);
-		close(1);
-		close(2);
+    /* output expected lockfile name.  */
+    snprintf(lockfile, sizeof lockfile, ",%011" PRIx64 ".%d", ms, child);
+    if (!qflag)
+      dprintf(1, "%s\n", lockfile);
+    close(0);
+    close(1);
+    close(2);
 
-		/* signal parent to exit.  */
-		close(pipefd[1]);
+    /* signal parent to exit.  */
+    close(pipefd[1]);
 
-		wait(&status);
+    wait(&status);
 
-		lockfd = openat(dirfd, lockfile, O_RDWR | O_APPEND);
-		if (lockfd < 0) {
-			perror("open");
-			exit(222);
-		}
+    lockfd = openat(dirfd, lockfile, O_RDWR | O_APPEND);
+    if (lockfd < 0) {
+      perror("open");
+      exit(222);
+    }
 
-		fchmod(lockfd, 0600);
-		if (WIFEXITED(status))
-			dprintf(lockfd, "\n[exited with status %d.]\n",
-			    WEXITSTATUS(status));
-		else
-			dprintf(lockfd, "\n[killed by signal %d.]\n",
-			    WTERMSIG(status));
+    fchmod(lockfd, 0600);
+    if (WIFEXITED(status))
+      dprintf(lockfd, "\n[exited with status %d.]\n", WEXITSTATUS(status));
+    else
+      dprintf(lockfd, "\n[killed by signal %d.]\n", WTERMSIG(status));
 
-		exit(0);
-	}
+    exit(0);
+  }
 
-	close(pipefd[1]);
+  close(pipefd[1]);
 
-	/* create and lock lockfile.  since this cannot be done in one step,
-	   use a different filename first.  */
-	snprintf(lockfile, sizeof lockfile,
-	    ".,%011" PRIx64 ".%d", ms, getpid());
-	lockfd = openat(dirfd, lockfile,
-	    O_CREAT | O_EXCL | O_RDWR | O_APPEND, 0600);
-	if (lockfd < 0) {
-		perror("open");
-		exit(222);
-	}
-	if (flock(lockfd, LOCK_EX) < 0) {
-		perror("flock");
-		exit(222);
-	}
+  /* create and lock lockfile.  since this cannot be done in one step,
+     use a different filename first.  */
+  snprintf(lockfile, sizeof lockfile, ".,%011" PRIx64 ".%d", ms, getpid());
+  lockfd = openat(dirfd, lockfile, O_CREAT | O_EXCL | O_RDWR | O_APPEND, 0600);
+  if (lockfd < 0) {
+    perror("open");
+    exit(222);
+  }
+  if (flock(lockfd, LOCK_EX) < 0) {
+    perror("flock");
+    exit(222);
+  }
 
-	/* drop leading '.' */
-	renameat(dirfd, lockfile, dirfd, lockfile+1);
+  /* drop leading '.' */
+  renameat(dirfd, lockfile, dirfd, lockfile+1);
 
-	/* block until rename is committed */
-	fsync(dirfd);
+  /* block until rename is committed */
+  fsync(dirfd);
 
-	write_execline(lockfd, argc, argv);
+  write_execline(lockfd, argc, argv);
 
-	if (dup2(lockfd, 2) < 0 ||
-	    dup2(lockfd, 1) < 0) {
-		perror("dup2");
-		exit(222);
-	}
+  if (dup2(lockfd, 2) < 0 || dup2(lockfd, 1) < 0) {
+    perror("dup2");
+    exit(222);
+  }
 
 wait:
-	if ((tflag || wflag) && argc - optind > 0) {
-		/* wait for files passed as command line arguments.  */
+  if ((tflag || wflag) && argc - optind > 0) {
+    /* wait for files passed as command line arguments.  */
 
-		int i;
-		for (i = optind; i < argc; i++) {
-			int fd;
+    int i;
+    for (i = optind; i < argc; i++) {
+      int fd;
 
-			if (strchr(argv[i], '/'))
-				fd = open(argv[i], O_RDWR);
-			else
-				fd = openat(dirfd, argv[i], O_RDWR);
-			if (fd < 0)
-				continue;
+      if (strchr(argv[i], '/'))
+        fd = open(argv[i], O_RDWR);
+      else
+        fd = openat(dirfd, argv[i], O_RDWR);
+      if (fd < 0)
+        continue;
 
-			if (flock(fd, LOCK_EX | LOCK_NB) == -1 &&
-			    errno == EWOULDBLOCK) {
-				if (tflag)
-					exit(1);
-				flock(fd, LOCK_EX);   /* sit it out.  */
-			}
+      if (flock(fd, LOCK_EX | LOCK_NB) == -1 && errno == EWOULDBLOCK) {
+        if (tflag)
+          exit(1);
+        flock(fd, LOCK_EX);   /* sit it out.  */
+      }
 
-			fchmod(fd, 0600);
-			close(fd);
-		}
-	} else {
-		dir = fdopendir(dirfd);
-		if (!dir) {
-			perror("fdopendir");
-			exit(111);
-		}
+      fchmod(fd, 0600);
+      close(fd);
+    }
+  } else {
+    dir = fdopendir(dirfd);
+    if (!dir) {
+      perror("fdopendir");
+      exit(111);
+    }
 
 again:
-		while ((ent = readdir(dir))) {
-			/* wait for all ,* files.  */
+    while ((ent = readdir(dir))) {
+      /* wait for all ,* files.  */
 
-			if (ent->d_name[0] == ',' &&
-			    strcmp(ent->d_name, lockfile+1) < 0) {
-				int fd;
+      if (ent->d_name[0] == ',' && strcmp(ent->d_name, lockfile+1) < 0) {
+        int fd;
 
-				fd = openat(dirfd, ent->d_name, O_RDWR);
-				if (fd < 0)
-					continue;
+        fd = openat(dirfd, ent->d_name, O_RDWR);
+        if (fd < 0)
+          continue;
 
-				if (flock(fd, LOCK_EX | LOCK_NB) == -1 &&
-				    errno == EWOULDBLOCK) {
-					if (tflag)
-						exit(1);
-					flock(fd, LOCK_EX);   /* sit it out.  */
+        if (flock(fd, LOCK_EX | LOCK_NB) == -1 && errno == EWOULDBLOCK) {
+          if (tflag)
+            exit(1);
+          flock(fd, LOCK_EX);   /* sit it out.  */
 
-					close(fd);
-					rewinddir(dir);
-					goto again;
-				}
+          close(fd);
+          rewinddir(dir);
+          goto again;
+        }
 
-				fchmod(fd, 0600);
-				close(fd);
-			}
-		}
+        fchmod(fd, 0600);
+        close(fd);
+      }
+    }
 
-		closedir(dir);		/* closes dirfd too.  */
-	}
+    closedir(dir);    /* closes dirfd too.  */
+  }
 
-	if (tflag || wflag)
-		exit(0);
+  if (tflag || wflag)
+    exit(0);
 
-	/* ready to run.  */
+  /* ready to run.  */
 
-	swrite(lockfd, "\n\n");
-	fchmod(lockfd, 0700);
+  swrite(lockfd, "\n\n");
+  fchmod(lockfd, 0700);
 
-	close(lockfd);
+  close(lockfd);
 
-	setenv("NQJOBID", lockfile+1, 1);
-	setsid();
-	execvp(argv[optind], argv+optind);
+  setenv("NQJOBID", lockfile+1, 1);
+  setsid();
+  execvp(argv[optind], argv+optind);
 
-	perror("execvp");
-	return 222;
+  perror("execvp");
+  return 222;
 }

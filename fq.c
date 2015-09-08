@@ -35,176 +35,175 @@ char buf[8192];
 static int
 islocked(int fd)
 {
-	if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
-		return (errno == EWOULDBLOCK);
-	} else {
-		flock(fd, LOCK_UN);
-		return 0;
-	}
+  if (flock(fd, LOCK_EX | LOCK_NB) == -1) {
+    return (errno == EWOULDBLOCK);
+  } else {
+    flock(fd, LOCK_UN);
+    return 0;
+  }
 }
 
 static int
 alphabetic(const void *a, const void *b)
 {
-	return strcmp(*(char **)a, *(char **)b);
+  return strcmp(*(char **)a, *(char **)b);
 }
 
 int
 main(int argc, char *argv[])
 {
-	int i, fd, dirfd;
-	off_t off, loff;
-	ssize_t rd;
-	int didsth = 0, seen_nl = 0;
-	int opt = 0, aflag = 0, qflag = 0;
-	char *path;
+  int i, fd, dirfd;
+  off_t off, loff;
+  ssize_t rd;
+  int didsth = 0, seen_nl = 0;
+  int opt = 0, aflag = 0, qflag = 0;
+  char *path;
 
 #ifdef USE_INOTIFY
-	int ifd, wd;
+  int ifd, wd;
 #endif
 
-	close(0);
+  close(0);
 
-	while ((opt = getopt(argc, argv, "+aq")) != -1) {
-		switch (opt) {
-		case 'a':
-			aflag = 1;
-			break;
-		case 'q':
-			qflag = 1;
-			break;
-		default:
-			fputs("usage: fq [-qa] [JOBID...]\n", stderr);
-			exit(1);
-		}
-	}
+  while ((opt = getopt(argc, argv, "+aq")) != -1) {
+    switch (opt) {
+    case 'a':
+      aflag = 1;
+      break;
+    case 'q':
+      qflag = 1;
+      break;
+    default:
+      fputs("usage: fq [-qa] [JOBID...]\n", stderr);
+      exit(1);
+    }
+  }
 
-	path = getenv("NQDIR");
-	if (!path)
-		path = ".";
+  path = getenv("NQDIR");
+  if (!path)
+    path = ".";
 
-	dirfd = open(path, O_RDONLY | O_DIRECTORY);
-	if (dirfd < 0) {
-		perror("open dir");
-		exit(111);
-	}
+  dirfd = open(path, O_RDONLY | O_DIRECTORY);
+  if (dirfd < 0) {
+    perror("open dir");
+    exit(111);
+  }
 
-	if (optind == argc) {	/* behave as if $NQDIR/,* was passed. */
-		DIR *dir;
-		struct dirent *d;
-		int len = 0;
+  if (optind == argc) {  /* behave as if $NQDIR/,* was passed. */
+    DIR *dir;
+    struct dirent *d;
+    int len = 0;
 
-		argc = 0;
-		argv = 0;
-		optind = 0;
+    argc = 0;
+    argv = 0;
+    optind = 0;
 
-		dir = fdopendir(dirfd);
-		if (!dir)
-			exit(111);
+    dir = fdopendir(dirfd);
+    if (!dir)
+      exit(111);
 
-		while ((d = readdir(dir))) {
-			if (d->d_name[0] != ',')
-				continue;
-			if (argc >= len) {
-				len = 2*len + 1;
-				argv = realloc(argv, len * sizeof (char *));
-				if (!argv)
-					exit(222);
-			}
-			argv[argc] = strdup(d->d_name);
-			if (!argv[argc])
-				exit(222);
-			argc++;
-		}
+    while ((d = readdir(dir))) {
+      if (d->d_name[0] != ',')
+        continue;
+      if (argc >= len) {
+        len = 2*len + 1;
+        argv = realloc(argv, len * sizeof (char *));
+        if (!argv)
+          exit(222);
+      }
+      argv[argc] = strdup(d->d_name);
+      if (!argv[argc])
+        exit(222);
+      argc++;
+    }
 
-		qsort(argv, argc, sizeof (char *), alphabetic);
-	}
+    qsort(argv, argc, sizeof (char *), alphabetic);
+  }
 
 #ifdef USE_INOTIFY
-	ifd = inotify_init();
-	if (ifd < 0)
-		exit(111);
+  ifd = inotify_init();
+  if (ifd < 0)
+    exit(111);
 #endif
 
-	for (i = optind; i < argc; i++) {
-		loff = 0;
-		seen_nl = 0;
+  for (i = optind; i < argc; i++) {
+    loff = 0;
+    seen_nl = 0;
 
-		fd = openat(dirfd, argv[i], O_RDONLY);
-		if (fd < 0)
-			continue;
+    fd = openat(dirfd, argv[i], O_RDONLY);
+    if (fd < 0)
+      continue;
 
-		/* skip not running jobs, unless -a was passed, or we did not
-		 * output anything yet and are at the last argument.  */
-		if (!aflag && !islocked(fd) && (didsth || i != argc - 1))
-			continue;
+    /* skip not running jobs, unless -a was passed, or we did not
+     * output anything yet and are at the last argument.  */
+    if (!aflag && !islocked(fd) && (didsth || i != argc - 1))
+      continue;
 
-		write(1, "==> ", 4);
-		write(1, argv[i], strlen(argv[i]));
-		write(1, qflag ? " " : "\n", 1);
+    write(1, "==> ", 4);
+    write(1, argv[i], strlen(argv[i]));
+    write(1, qflag ? " " : "\n", 1);
 
-		didsth = 1;
+    didsth = 1;
 
 #ifdef USE_INOTIFY
-		wd = inotify_add_watch(ifd, argv[i], IN_MODIFY | IN_CLOSE_WRITE);
+    wd = inotify_add_watch(ifd, argv[i], IN_MODIFY | IN_CLOSE_WRITE);
 #endif
 
-		while (1) {
-			off = lseek(fd, 0, SEEK_END);
+    while (1) {
+      off = lseek(fd, 0, SEEK_END);
 
-			if (off < loff)
-				loff = off;               /* file truncated */
+      if (off < loff)
+        loff = off;               /* file truncated */
 
-			if (off == loff) {
-				if (flock(fd, LOCK_EX | LOCK_NB) == -1 &&
-				    errno == EWOULDBLOCK) {
+      if (off == loff) {
+        if (flock(fd, LOCK_EX | LOCK_NB) == -1 && errno == EWOULDBLOCK) {
 #ifdef USE_INOTIFY
-					/* any inotify event is good */
-					read(ifd, ibuf, sizeof ibuf);
+          /* any inotify event is good */
+          read(ifd, ibuf, sizeof ibuf);
 #else
-					/* poll for size change */
-					while (off == lseek(fd, 0, SEEK_END))
-						usleep(DELAY);
+          /* poll for size change */
+          while (off == lseek(fd, 0, SEEK_END))
+            usleep(DELAY);
 #endif
-					continue;
-				} else {
-					flock(fd, LOCK_UN);
-					break;
-				}
-			}
+          continue;
+        } else {
+          flock(fd, LOCK_UN);
+          break;
+        }
+      }
 
-			if (off - loff > sizeof buf)
-				off = loff + sizeof buf;
+      if (off - loff > sizeof buf)
+        off = loff + sizeof buf;
 
-			rd = pread(fd, &buf, off - loff, loff);
-			if (qflag) {
-				if (!seen_nl) {
-					char *s;
-					if ((s = memchr(buf, '\n', rd))) {
-						write(1, buf, s+1-buf);
-						seen_nl = 1;
-					} else {
-						write(1, buf, rd);
-					}
-				}
-			} else {
-				write(1, buf, rd);
-			}
+      rd = pread(fd, &buf, off - loff, loff);
+      if (qflag) {
+        if (!seen_nl) {
+          char *s;
+          if ((s = memchr(buf, '\n', rd))) {
+            write(1, buf, s+1-buf);
+            seen_nl = 1;
+          } else {
+            write(1, buf, rd);
+          }
+        }
+      } else {
+        write(1, buf, rd);
+      }
 
-			loff += rd;
-		}
+      loff += rd;
+    }
 
-		if (qflag && !seen_nl)
-			write(1, "\n", 1);
+    if (qflag && !seen_nl)
+      write(1, "\n", 1);
 
 #ifdef USE_INOTIFY
-		inotify_rm_watch(ifd, wd);
+    inotify_rm_watch(ifd, wd);
 #endif
-		close(fd);
-	}
+    close(fd);
+  }
 
 #ifdef USE_INOTIFY
-	close(ifd);
+  close(ifd);
 #endif
-	return 0;
+  return 0;
 }
