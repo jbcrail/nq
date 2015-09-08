@@ -47,17 +47,16 @@ CFLAGS="-g -O2 -Wall -pedantic"
 
 case ${OS} in
     *linux*)
-        CFLAGS="${CFLAGS} -std=c99 -D_XOPEN_SOURCE -DUSE_INOTIFY"
+        CFLAGS="${CFLAGS} -DUSE_INOTIFY"
         LDFLAGS="-lm"
         ;;
 
     *darwin*)
-        CFLAGS="${CFLAGS} -std=c99"
         LDFLAGS=""
         ;;
 
     *freebsd*)
-        CFLAGS="${CFLAGS} -std=c99 -D_WITH_DPRINTF"
+        CFLAGS="${CFLAGS} -D_WITH_DPRINTF"
         LDFLAGS="-lm"
         ;;
 
@@ -66,11 +65,10 @@ case ${OS} in
         LDFLAGS="-lm"
         case ${OS} in
             *sunos-5.8*) # Solaris 8
-                CFLAGS="${CFLAGS} -std=gnu99 -D_XOPEN_SOURCE -D_XPG4_2"
+                CFLAGS="${CFLAGS} -D_XPG4_2"
                 ;;
 
               *)
-                CFLAGS="${CFLAGS} -std=c99"
                 ;;
         esac
         ;;
