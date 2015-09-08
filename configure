@@ -47,7 +47,7 @@ CFLAGS="-g -O2 -Wall -pedantic"
 
 case ${OS} in
     *linux*)
-        CFLAGS="${CFLAGS} -DUSE_INOTIFY"
+        CFLAGS="${CFLAGS} -DUSE_INOTIFY -D_GNU_SOURCE -std=c99"
         LDFLAGS="-lm"
         ;;
 
@@ -60,17 +60,9 @@ case ${OS} in
         LDFLAGS="-lm"
         ;;
 
-    *sunos*) # Solaris
-        CFLAGS="${CFLAGS} -D__EXTENSIONS__"
+    *sunos*) # Solaris 10+
+        CFLAGS="${CFLAGS} -D__EXTENSIONS__ -std=c99"
         LDFLAGS="-lm"
-        case ${OS} in
-            *sunos-5.8*) # Solaris 8
-                CFLAGS="${CFLAGS} -D_XPG4_2"
-                ;;
-
-              *)
-                ;;
-        esac
         ;;
 
     *)
