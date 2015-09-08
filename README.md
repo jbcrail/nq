@@ -1,3 +1,6 @@
+This is a port of the original `nq` to platforms not fully compliant to
+POSIX, such as Solaris or older Linux kernels.
+
 ## nq: queue utilities
 
 These small utilities allow creating very lightweight job queue
@@ -115,9 +118,10 @@ Lock files from `nq` and `nq.sh` should not be mixed.)
 
 ## Installation
 
-Use `make all` to build, `make install` to install relative to `PREFIX`
-(`/usr/local` by default).  The `DESTDIR` convention is respected.
-You can also just copy the binaries into your `PATH`.
+Use `./configure` to configure, `make all` to build, and `make install` to
+install relative to `PREFIX` (`/usr/local` by default).  The `DESTDIR`
+convention is respected.  You can also just copy the binaries into your
+`PATH`.
 
 You can use `make check` to run a simple test suite, if you have
 Perl's `prove` installed.
